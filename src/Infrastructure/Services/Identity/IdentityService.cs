@@ -12,10 +12,15 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using BlazorHero.CleanArchitecture.Shared.Constants.Role;
+using BlazorHero.CleanArchitecture.Shared.Constants.User;
+using Microsoft.Graph;
+using Microsoft.Identity.Client;
 
 namespace BlazorHero.CleanArchitecture.Infrastructure.Services.Identity
 {
@@ -28,26 +33,50 @@ namespace BlazorHero.CleanArchitecture.Infrastructure.Services.Identity
         private readonly AppConfiguration _appConfig;
         private readonly SignInManager<BlazorHeroUser> _signInManager;
         private readonly IStringLocalizer<IdentityService> _localizer;
+        private readonly AzureTokenService _azureTokenService;
+
 
         public IdentityService(
             UserManager<BlazorHeroUser> userManager, RoleManager<BlazorHeroRole> roleManager,
             IOptions<AppConfiguration> appConfig, SignInManager<BlazorHeroUser> signInManager,
-            IStringLocalizer<IdentityService> localizer)
+            IStringLocalizer<IdentityService> localizer, AzureTokenService azureTokenService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _appConfig = appConfig.Value;
             _signInManager = signInManager;
             _localizer = localizer;
+            _azureTokenService = azureTokenService;
         }
 
         public async Task<Result<TokenResponse>> LoginAsync(TokenRequest model)
         {
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            if (user == null)
+            User azureUser = await _azureTokenService.GetUser(model.Email, model.Password);
+
+            if (azureUser == null)
             {
                 return await Result<TokenResponse>.FailAsync(_localizer["User Not Found."]);
             }
+            
+            BlazorHeroUser user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+            {
+                var basicUser = new BlazorHeroUser
+                {
+                    FirstName = azureUser.GivenName,
+                    LastName = azureUser.Surname,
+                    Email = azureUser.UserPrincipalName,
+                    UserName = azureUser.UserPrincipalName,
+                    EmailConfirmed = true,
+                    PhoneNumberConfirmed = true,
+                    IsActive = true
+                };
+
+                await _userManager.CreateAsync(basicUser, "Random");
+                await _userManager.AddToRoleAsync(basicUser, RoleConstants.BasicRole);
+            }
+
+            user = await _userManager.FindByEmailAsync(model.Email);
             if (!user.IsActive)
             {
                 return await Result<TokenResponse>.FailAsync(_localizer["User Not Active. Please contact the administrator."]);
@@ -56,11 +85,11 @@ namespace BlazorHero.CleanArchitecture.Infrastructure.Services.Identity
             {
                 return await Result<TokenResponse>.FailAsync(_localizer["E-Mail not confirmed."]);
             }
-            var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
-            if (!passwordValid)
-            {
-                return await Result<TokenResponse>.FailAsync(_localizer["Invalid Credentials."]);
-            }
+            //var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
+            //if (!passwordValid)
+            //{
+            //    return await Result<TokenResponse>.FailAsync(_localizer["Invalid Credentials."]);
+            //}
 
             user.RefreshToken = GenerateRefreshToken();
             user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
@@ -101,7 +130,7 @@ namespace BlazorHero.CleanArchitecture.Infrastructure.Services.Identity
         private async Task<IEnumerable<Claim>> GetClaimsAsync(BlazorHeroUser user)
         {
             var userClaims = await _userManager.GetClaimsAsync(user);
-            var roles = await _userManager.GetRolesAsync(user);
+            var roles = await _azureTokenService.GetRoles(user.UserName, "");
             var roleClaims = new List<Claim>();
             var permissionClaims = new List<Claim>();
             foreach (var role in roles)
