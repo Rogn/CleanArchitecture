@@ -12,6 +12,7 @@ using BlazorHero.CleanArchitecture.Infrastructure.Services.Storage;
 using BlazorHero.CleanArchitecture.Application.Serialization.Options;
 using BlazorHero.CleanArchitecture.Infrastructure.Services.Storage.Provider;
 using BlazorHero.CleanArchitecture.Application.Serialization.Serializers;
+using BlazorHero.CleanArchitecture.Infrastructure.Services.Identity;
 
 namespace BlazorHero.CleanArchitecture.Infrastructure.Extensions
 {
@@ -48,6 +49,7 @@ namespace BlazorHero.CleanArchitecture.Infrastructure.Extensions
                 .AddScoped<IJsonSerializer, SystemTextJsonSerializer>()
                 .AddScoped<IStorageProvider, ServerStorageProvider>()
                 .AddScoped<IServerStorageService, ServerStorageService>()
+                .AddSingleton<AzureTokenService>()
                 .AddScoped<ISyncServerStorageService, ServerStorageService>()
                 .Configure<SystemTextJsonOptions>(configureOptions =>
                 {

@@ -139,6 +139,15 @@ namespace BlazorHero.CleanArchitecture.Shared.Constants.Permission
             public const string Search = "Permissions.AuditTrails.Search";
         }
 
+
+
+        [DisplayName("Business Central Sync Monitor")]
+        [Description("Business Central Sync Monitor")]
+        public static class BusinessCentralMonitor
+        {
+            public const string View = "Permissions.BusinessCentralMonitor.View";
+        }
+
         /// <summary>
         /// Returns a list of Permissions.
         /// </summary>
